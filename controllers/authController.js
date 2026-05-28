@@ -4,6 +4,12 @@ import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import sendEmail from '../utils/sendEmail.js'
 
+const passwordRegex =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/
+
+const passwordMessage =
+  'Password must contain uppercase, lowercase, number, special character and minimum 8 characters'
+
 const logError = (title, error, req) => {
   console.log(`\n❌ ${title}`)
   console.log('METHOD:', req?.method)
@@ -60,6 +66,13 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Please fill all fields',
+      })
+    }
+
+    if (!passwordRegex.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: passwordMessage,
       })
     }
 
@@ -406,6 +419,20 @@ export const resetPassword = async (req, res) => {
   try {
     const { token } = req.params
     const { password } = req.body
+
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password is required',
+      })
+    }
+
+    if (!passwordRegex.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: passwordMessage,
+      })
+    }
 
     const hashedToken = crypto
       .createHash('sha256')
