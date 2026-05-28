@@ -48,6 +48,10 @@ const sendUserResponse = (user, res) => {
   })
 }
 
+const getFrontendUrl = () => {
+  return process.env.FRONTEND_URL?.replace(/\/$/, '')
+}
+
 export const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body
@@ -56,6 +60,13 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Please fill all fields',
+      })
+    }
+
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({
+        success: false,
+        message: 'JWT_SECRET missing in environment variables',
       })
     }
 
@@ -93,7 +104,20 @@ export const registerUser = async (req, res) => {
     })
 
     if (!isAdmin) {
-      const verifyUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`
+      const frontendUrl = getFrontendUrl()
+
+      if (!frontendUrl) {
+        user.emailVerificationToken = ''
+        user.emailVerificationExpire = null
+        await user.save()
+
+        return res.status(500).json({
+          success: false,
+          message: 'FRONTEND_URL missing in environment variables',
+        })
+      }
+
+      const verifyUrl = `${frontendUrl}/verify-email/${verificationToken}`
 
       const emailResult = await sendEmail({
         to: user.email,
@@ -108,7 +132,14 @@ export const registerUser = async (req, res) => {
       })
 
       if (!emailResult.success) {
-        console.log('❌ Verification email failed:', emailResult.message)
+        user.emailVerificationToken = ''
+        user.emailVerificationExpire = null
+        await user.save()
+
+        return res.status(500).json({
+          success: false,
+          message: emailResult.message || 'Verification email failed',
+        })
       }
     }
 
@@ -238,6 +269,15 @@ export const resendVerificationEmail = async (req, res) => {
       })
     }
 
+    const frontendUrl = getFrontendUrl()
+
+    if (!frontendUrl) {
+      return res.status(500).json({
+        success: false,
+        message: 'FRONTEND_URL missing in environment variables',
+      })
+    }
+
     const verificationToken = crypto.randomBytes(32).toString('hex')
 
     const hashedVerificationToken = crypto
@@ -250,7 +290,7 @@ export const resendVerificationEmail = async (req, res) => {
 
     await user.save()
 
-    const verifyUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`
+    const verifyUrl = `${frontendUrl}/verify-email/${verificationToken}`
 
     const emailResult = await sendEmail({
       to: user.email,
@@ -265,9 +305,13 @@ export const resendVerificationEmail = async (req, res) => {
     })
 
     if (!emailResult.success) {
+      user.emailVerificationToken = ''
+      user.emailVerificationExpire = null
+      await user.save()
+
       return res.status(500).json({
         success: false,
-        message: emailResult.message,
+        message: emailResult.message || 'Failed to send verification email',
       })
     }
 
@@ -298,6 +342,15 @@ export const forgotPassword = async (req, res) => {
       })
     }
 
+    const frontendUrl = getFrontendUrl()
+
+    if (!frontendUrl) {
+      return res.status(500).json({
+        success: false,
+        message: 'FRONTEND_URL missing in environment variables',
+      })
+    }
+
     const resetToken = crypto.randomBytes(32).toString('hex')
 
     const hashedResetToken = crypto
@@ -310,7 +363,7 @@ export const forgotPassword = async (req, res) => {
 
     await user.save()
 
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`
+    const resetUrl = `${frontendUrl}/reset-password/${resetToken}`
 
     const emailResult = await sendEmail({
       to: user.email,
@@ -325,9 +378,13 @@ export const forgotPassword = async (req, res) => {
     })
 
     if (!emailResult.success) {
+      user.resetPasswordToken = ''
+      user.resetPasswordExpire = null
+      await user.save()
+
       return res.status(500).json({
         success: false,
-        message: emailResult.message,
+        message: emailResult.message || 'Failed to send password reset email',
       })
     }
 
