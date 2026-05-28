@@ -17,22 +17,39 @@ const sendEmail = async ({ to, subject, html }) => {
       }
     }
 
+    if (
+      !process.env.EMAIL_USER ||
+      !process.env.EMAIL_PASS ||
+      !process.env.EMAIL_FROM
+    ) {
+      return {
+        success: false,
+        message:
+          'EMAIL_USER, EMAIL_PASS or EMAIL_FROM missing in environment variables',
+      }
+    }
+
     const transporter = nodemailer.createTransport({
-      host: 'smtp-relay.brevo.com',
-      port: 587,
+      host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
+      port: Number(process.env.EMAIL_PORT) || 587,
       secure: false,
 
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000,
     })
 
     await transporter.verify()
+
     console.log('✅ SMTP connected successfully')
 
     const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
+      from: `"GYM PRO" <${process.env.EMAIL_FROM}>`,
       to,
       subject,
       html,
@@ -52,7 +69,10 @@ const sendEmail = async ({ to, subject, html }) => {
 
     return {
       success: false,
-      message: error.response || error.message || 'Email failed',
+      message:
+        error.response ||
+        error.message ||
+        'Email failed',
     }
   }
 }
