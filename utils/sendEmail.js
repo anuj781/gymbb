@@ -1,14 +1,15 @@
-import nodemailer from 'nodemailer'
+import {
+  TransactionalEmailsApi,
+  SendSmtpEmail,
+} from '@getbrevo/brevo'
 
 const sendEmail = async ({ to, subject, html }) => {
   try {
-    console.log('📩 Email sending started')
+    console.log('📩 Brevo API email sending started')
     console.log('TO:', to)
-    console.log('EMAIL_HOST:', process.env.EMAIL_HOST)
-    console.log('EMAIL_PORT:', process.env.EMAIL_PORT)
-    console.log('EMAIL_USER:', process.env.EMAIL_USER)
-    console.log('EMAIL_PASS exists:', Boolean(process.env.EMAIL_PASS))
+    console.log('BREVO_API_KEY exists:', Boolean(process.env.BREVO_API_KEY))
     console.log('EMAIL_FROM:', process.env.EMAIL_FROM)
+    console.log('EMAIL_FROM_NAME:', process.env.EMAIL_FROM_NAME)
 
     if (!to || !subject || !html) {
       return {
@@ -17,57 +18,51 @@ const sendEmail = async ({ to, subject, html }) => {
       }
     }
 
-    if (
-      !process.env.EMAIL_USER ||
-      !process.env.EMAIL_PASS ||
-      !process.env.EMAIL_FROM
-    ) {
+    if (!process.env.BREVO_API_KEY || !process.env.EMAIL_FROM) {
       return {
         success: false,
-        message:
-          'EMAIL_USER, EMAIL_PASS or EMAIL_FROM missing in environment variables',
+        message: 'BREVO_API_KEY or EMAIL_FROM missing in environment variables',
       }
     }
 
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
-      port: Number(process.env.EMAIL_PORT) || 587,
-      secure: false,
-      requireTLS: true,
+    const apiInstance = new TransactionalEmailsApi()
 
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+    apiInstance.authentications.apiKey.apiKey =
+      process.env.BREVO_API_KEY
+
+    const sendSmtpEmail = new SendSmtpEmail()
+
+    sendSmtpEmail.subject = subject
+    sendSmtpEmail.htmlContent = html
+
+    sendSmtpEmail.sender = {
+      name: process.env.EMAIL_FROM_NAME || 'GYM PRO',
+      email: process.env.EMAIL_FROM,
+    }
+
+    sendSmtpEmail.to = [
+      {
+        email: to,
       },
+    ]
 
-      connectionTimeout: 60000,
-      greetingTimeout: 60000,
-      socketTimeout: 60000,
-    })
+    const response = await apiInstance.sendTransacEmail(sendSmtpEmail)
 
-    const info = await transporter.sendMail({
-      from: `"GYM PRO" <${process.env.EMAIL_FROM}>`,
-      to,
-      subject,
-      html,
-    })
-
-    console.log('✅ Email sent:', info.messageId)
+    console.log('✅ Brevo API email sent:', response?.body || response)
 
     return {
       success: true,
       message: 'Email sent successfully',
     }
   } catch (error) {
-    console.log('❌ Email Error Message:', error.message)
-    console.log('❌ Email Error Code:', error.code)
-    console.log('❌ Email Error Response:', error.response)
-    console.log('❌ Full Email Error:', error)
+    console.log('❌ Brevo API Error Message:', error.message)
+    console.log('❌ Brevo API Error Body:', error.body)
+    console.log('❌ Brevo API Full Error:', error)
 
     return {
       success: false,
       message:
-        error.response ||
+        error.body?.message ||
         error.message ||
         'Email failed',
     }
