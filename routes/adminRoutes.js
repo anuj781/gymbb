@@ -13,6 +13,10 @@ import {
   assignGoalToUser,
   assignTrainerToUser,
 
+  removeTrainerFromUser,
+  removeProgramFromUser,
+  removePlanFromUser,
+
   getAllTrainers,
   createTrainer,
   updateTrainer,
@@ -62,13 +66,25 @@ router.delete('/user/:userId', deleteUser)
 
 router.post('/assign-goal/:userId', assignGoalToUser)
 
+/* TRAINER ASSIGN / REMOVE */
+
+router.put('/assign-trainer/:userId', assignTrainerToUser)
+router.put('/users/:userId/remove-trainer', removeTrainerFromUser)
+
+/* PROGRAM REMOVE FROM USER */
+
+router.put('/users/:userId/remove-program', removeProgramFromUser)
+
+/* PLAN REMOVE FROM USER */
+
+router.put('/users/:userId/remove-plan', removePlanFromUser)
+
 /* TRAINERS */
 
 router.get('/trainers', getAllTrainers)
 router.post('/trainers', createTrainer)
 router.put('/trainers/:trainerId', updateTrainer)
 router.delete('/trainers/:trainerId', deleteTrainer)
-router.put('/assign-trainer/:userId', assignTrainerToUser)
 
 /* PROGRAMS */
 

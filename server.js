@@ -65,6 +65,22 @@ app.use(
   })
 )
 
+/* SOCKET SERVER */
+
+const server = createServer(app)
+
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
+})
+
+/* MAKE SOCKET.IO AVAILABLE IN CONTROLLERS */
+
+app.set('io', io)
+
 /* API ROUTES */
 
 app.use('/api/auth', authRoutes)
@@ -86,20 +102,11 @@ app.get('/', (req, res) => {
   res.send('🚀 Gym API Running Successfully')
 })
 
-/* SOCKET SERVER */
-
-const server = createServer(app)
-
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
-})
-
 io.on('connection', (socket) => {
+  console.log('Socket connected:', socket.id)
+
   /* PUBLIC CHAT */
+
   socket.on('send_message', (data) => {
     socket.broadcast.emit('receive_message', data)
   })
@@ -116,6 +123,7 @@ io.on('connection', (socket) => {
 
   socket.on('join_private_chat', (conversationId) => {
     if (!conversationId) return
+
     socket.join(conversationId)
   })
 
@@ -190,6 +198,10 @@ io.on('connection', (socket) => {
     if (!conversationId) return
 
     socket.to(conversationId).emit('private_stop_typing')
+  })
+
+  socket.on('disconnect', () => {
+    console.log('Socket disconnected:', socket.id)
   })
 })
 

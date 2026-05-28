@@ -12,6 +12,16 @@ const safeImage = (image) => {
     : undefined
 }
 
+const emitProfileUpdated = (req, userId) => {
+  const io = req.app.get('io')
+
+  if (io && userId) {
+    io.emit('profileUpdated', {
+      userId: userId.toString(),
+    })
+  }
+}
+
 /* DASHBOARD STATS */
 
 export const getAdminStats = async (req, res) => {
@@ -86,6 +96,8 @@ export const assignGoalToUser = async (req, res) => {
       priority: req.body.priority || 'Medium',
     })
 
+    emitProfileUpdated(req, user._id)
+
     res.status(201).json({
       message: 'Goal assigned successfully',
       goal,
@@ -113,6 +125,7 @@ export const assignTrainerToUser = async (req, res) => {
 
     user.assignedTrainer = trainer._id
     user.assignedTrainerDate = new Date()
+
     await user.save()
 
     if (
@@ -124,6 +137,7 @@ export const assignTrainerToUser = async (req, res) => {
     }
 
     trainer.totalClients = trainer.assignedUsers.length
+
     await trainer.save()
 
     const updatedUser = await User.findById(user._id)
@@ -132,9 +146,108 @@ export const assignTrainerToUser = async (req, res) => {
       .populate('selectedProgram')
       .populate('assignedTrainer', 'name specialization image')
 
+    emitProfileUpdated(req, user._id)
+
     res.status(200).json({
       message: 'Trainer assigned successfully',
       user: updatedUser,
+    })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+/* REMOVE TRAINER FROM USER */
+
+export const removeTrainerFromUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId)
+
+    if (!user) {
+      return res.status(404).json({
+        message: 'User not found',
+      })
+    }
+
+    if (user.assignedTrainer) {
+      const trainer = await Trainer.findById(user.assignedTrainer)
+
+      if (trainer) {
+        trainer.assignedUsers = trainer.assignedUsers.filter(
+          (id) => id.toString() !== user._id.toString()
+        )
+
+        trainer.totalClients = trainer.assignedUsers.length
+
+        await trainer.save()
+      }
+    }
+
+    user.assignedTrainer = null
+    user.assignedTrainerDate = null
+
+    await user.save()
+
+    emitProfileUpdated(req, user._id)
+
+    res.status(200).json({
+      message: 'Trainer removed successfully',
+      user,
+    })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+/* REMOVE PROGRAM FROM USER */
+
+export const removeProgramFromUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId)
+
+    if (!user) {
+      return res.status(404).json({
+        message: 'User not found',
+      })
+    }
+
+    user.selectedProgram = null
+
+    await user.save()
+
+    emitProfileUpdated(req, user._id)
+
+    res.status(200).json({
+      message: 'Program removed successfully',
+      user,
+    })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+/* REMOVE PLAN FROM USER */
+
+export const removePlanFromUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId)
+
+    if (!user) {
+      return res.status(404).json({
+        message: 'User not found',
+      })
+    }
+
+    user.selectedPlan = null
+    user.membership = 'Basic'
+
+    await user.save()
+
+    emitProfileUpdated(req, user._id)
+
+    res.status(200).json({
+      message: 'Plan removed successfully',
+      user,
     })
   } catch (error) {
     res.status(500).json({ message: error.message })
@@ -146,6 +259,7 @@ export const assignTrainerToUser = async (req, res) => {
 export const getAllTrainers = async (req, res) => {
   try {
     const trainers = await Trainer.find().sort({ createdAt: -1 })
+
     res.status(200).json(trainers)
   } catch (error) {
     res.status(500).json({ message: error.message })
@@ -222,6 +336,12 @@ export const updateTrainer = async (req, res) => {
 
     await trainer.save()
 
+    if (Array.isArray(trainer.assignedUsers)) {
+      trainer.assignedUsers.forEach((userId) => {
+        emitProfileUpdated(req, userId)
+      })
+    }
+
     res.status(200).json({
       message: 'Trainer updated',
       trainer,
@@ -239,7 +359,25 @@ export const deleteTrainer = async (req, res) => {
       return res.status(404).json({ message: 'Trainer not found' })
     }
 
+    const assignedUsers = trainer.assignedUsers || []
+
+    await User.updateMany(
+      {
+        assignedTrainer: trainer._id,
+      },
+      {
+        $set: {
+          assignedTrainer: null,
+          assignedTrainerDate: null,
+        },
+      }
+    )
+
     await trainer.deleteOne()
+
+    assignedUsers.forEach((userId) => {
+      emitProfileUpdated(req, userId)
+    })
 
     res.status(200).json({
       message: 'Trainer deleted',
@@ -322,6 +460,14 @@ export const updateProgram = async (req, res) => {
 
     await program.save()
 
+    const users = await User.find({
+      selectedProgram: program._id,
+    }).select('_id')
+
+    users.forEach((user) => {
+      emitProfileUpdated(req, user._id)
+    })
+
     res.status(200).json({
       message: 'Program updated',
       program,
@@ -339,7 +485,26 @@ export const deleteProgram = async (req, res) => {
       return res.status(404).json({ message: 'Program not found' })
     }
 
+    const users = await User.find({
+      selectedProgram: program._id,
+    }).select('_id')
+
+    await User.updateMany(
+      {
+        selectedProgram: program._id,
+      },
+      {
+        $set: {
+          selectedProgram: null,
+        },
+      }
+    )
+
     await program.deleteOne()
+
+    users.forEach((user) => {
+      emitProfileUpdated(req, user._id)
+    })
 
     res.status(200).json({
       message: 'Program deleted',
@@ -354,6 +519,7 @@ export const deleteProgram = async (req, res) => {
 export const getAllPricingPlans = async (req, res) => {
   try {
     const pricingPlans = await Pricing.find().sort({ createdAt: -1 })
+
     res.status(200).json(pricingPlans)
   } catch (error) {
     res.status(500).json({ message: error.message })
@@ -444,6 +610,14 @@ export const updatePricingPlan = async (req, res) => {
 
     await pricing.save()
 
+    const users = await User.find({
+      selectedPlan: pricing._id,
+    }).select('_id')
+
+    users.forEach((user) => {
+      emitProfileUpdated(req, user._id)
+    })
+
     res.status(200).json({
       message: 'Pricing plan updated',
       pricing,
@@ -461,7 +635,27 @@ export const deletePricingPlan = async (req, res) => {
       return res.status(404).json({ message: 'Pricing plan not found' })
     }
 
+    const users = await User.find({
+      selectedPlan: pricing._id,
+    }).select('_id')
+
+    await User.updateMany(
+      {
+        selectedPlan: pricing._id,
+      },
+      {
+        $set: {
+          selectedPlan: null,
+          membership: 'Basic',
+        },
+      }
+    )
+
     await pricing.deleteOne()
+
+    users.forEach((user) => {
+      emitProfileUpdated(req, user._id)
+    })
 
     res.status(200).json({
       message: 'Pricing plan deleted',
@@ -476,6 +670,7 @@ export const deletePricingPlan = async (req, res) => {
 export const getAllTestimonials = async (req, res) => {
   try {
     const testimonials = await Testimonial.find().sort({ createdAt: -1 })
+
     res.status(200).json(testimonials)
   } catch (error) {
     res.status(500).json({ message: error.message })
@@ -587,6 +782,8 @@ export const banUser = async (req, res) => {
 
     await user.save()
 
+    emitProfileUpdated(req, user._id)
+
     res.status(200).json({
       message: 'User banned successfully',
     })
@@ -609,6 +806,8 @@ export const unbanUser = async (req, res) => {
     user.bannedReason = ''
 
     await user.save()
+
+    emitProfileUpdated(req, user._id)
 
     res.status(200).json({
       message: 'User unbanned successfully',
@@ -635,6 +834,8 @@ export const deleteUser = async (req, res) => {
     }
 
     await user.deleteOne()
+
+    emitProfileUpdated(req, user._id)
 
     res.status(200).json({
       message: 'User deleted successfully',
@@ -667,6 +868,8 @@ export const changeMembership = async (req, res) => {
     user.membership = membership
 
     await user.save()
+
+    emitProfileUpdated(req, user._id)
 
     res.status(200).json({
       message: 'Membership updated',
