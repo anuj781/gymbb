@@ -33,20 +33,17 @@ const sendEmail = async ({ to, subject, html }) => {
       host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
       port: Number(process.env.EMAIL_PORT) || 587,
       secure: false,
+      requireTLS: true,
 
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
 
-      connectionTimeout: 30000,
-      greetingTimeout: 30000,
-      socketTimeout: 30000,
+      connectionTimeout: 60000,
+      greetingTimeout: 60000,
+      socketTimeout: 60000,
     })
-
-    await transporter.verify()
-
-    console.log('✅ SMTP connected successfully')
 
     const info = await transporter.sendMail({
       from: `"GYM PRO" <${process.env.EMAIL_FROM}>`,
